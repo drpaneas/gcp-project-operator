@@ -124,6 +124,15 @@ func (r *ReconcileProjectReference) Reconcile(request reconcile.Request) (reconc
 		return r.requeueOnErr(err)
 	}
 
+	// Cleanup
+	if adapter.IsDeletionRequested() {
+		err := adapter.EnsureProjectCleanedUp()
+		if err != nil {
+			return r.requeueAfter(5*time.Second, err)
+		}
+		return r.doNotRequeue()
+	}
+
 	// Make projectReference  be processed based on state of ProjectClaim and Project Reference
 	claimStatus, err := adapter.EnsureProjectClaimUpdated()
 	if claimStatus == gcpv1alpha1.ClaimStatusReady || err != nil {
@@ -175,6 +184,13 @@ func (r *ReconcileProjectReference) Reconcile(request reconcile.Request) (reconc
 	err = adapter.EnsureProjectConfigured()
 	if err != nil {
 		return r.requeueAfter(5*time.Second, err)
+	}
+
+	reqLogger.Info("Adding a Finalizer")
+	err = adapter.EnsureFinalizerAdded()
+	if err != nil {
+		reqLogger.Error(err, "Error adding the finalizer")
+		return r.requeueOnErr(err)
 	}
 
 	err = adapter.EnsureStateReady()
